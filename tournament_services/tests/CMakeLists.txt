@@ -1,5 +1,6 @@
 project(tournament_tests)
 
+
 set(TEST_SOURCES
         controller/TeamControllerTest.cpp
         controller/TournamentControllerTest.cpp
@@ -22,4 +23,7 @@ target_link_libraries(${PROJECT_NAME}_runner PRIVATE
         GTest::gmock
         GTest::gmock_main)
 
-add_test(AllTestsInMain ${PROJECT_NAME}_runner)
+# add_test(AllTestsInMain ${PROJECT_NAME}_runner)
+
+include(GoogleTest)
+gtest_discover_tests(${PROJECT_NAME}_runner)

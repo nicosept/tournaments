@@ -7,8 +7,6 @@ set(SERVICES_SOURCES
         src/controller/TeamController.cpp
         src/controller/TournamentController.cpp)
 
-include(CTest)
-enable_testing()
 
 find_package(Crow CONFIG REQUIRED)
 find_package(libpqxx CONFIG REQUIRED)
