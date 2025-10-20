@@ -30,128 +30,179 @@ protected:
   }
 };
 
-// Tests de CreateTeam
+// ========== Tests para CreateTeam ==========
 
-// Validacion del JSON y creacion exitosa. Response 201
-TEST_F(TeamControllerTest, CreateTeam_ValidTeam) {
+// Validación del JSON, transformación a objeto de dominio Team y creación exitosa. Response 201
+TEST_F(TeamControllerTest, CreateTeam_ValidTeam_ReturnsCreated) {
+  // Arrange
   domain::Team capturedTeam;
   EXPECT_CALL(*teamDelegateMock, CreateTeam(testing::_))
     .WillOnce(testing::DoAll(testing::SaveArg<0>(&capturedTeam),
-                             testing::Return(std::expected<std::string, Error>{std::in_place, "new-id"})));
+                             testing::Return(std::expected<std::string, Error>{std::in_place, "550e8400-e29b-41d4-a716-446655440000"})));
 
-  nlohmann::json teamRequestBody = {{"name", "new team"}};
+  nlohmann::json teamRequestBody;
+  teamRequestBody["name"] = "New Team";
   crow::request teamRequest;
   teamRequest.body = teamRequestBody.dump();
 
+  // Act
   crow::response response = teamController->createTeam(teamRequest);
 
+  // Assert
   EXPECT_EQ(crow::CREATED, response.code);
   EXPECT_EQ(teamRequestBody.at("name").get<std::string>(), capturedTeam.Name);
+  EXPECT_TRUE(capturedTeam.Id.empty()); // El ID no debe estar configurado en el request
 }
 
-// Validacion del JSON y conflicto en DB. Response 409
+// Validación del JSON, transformación a objeto de dominio Team, conflicto en DB. Response 409
 TEST_F(TeamControllerTest, CreateTeam_DbConflict_Returns409) {
+  // Arrange
   EXPECT_CALL(*teamDelegateMock, CreateTeam(testing::_))
     .WillOnce(testing::Return(std::expected<std::string, Error>{std::unexpected(Error::DUPLICATE)}));
 
-  nlohmann::json teamRequestBody = {{"name", "dupe team"}};
+  nlohmann::json teamRequestBody;
+  teamRequestBody["name"] = "Duplicate Team";
   crow::request teamRequest;
   teamRequest.body = teamRequestBody.dump();
 
+  // Act
   crow::response response = teamController->createTeam(teamRequest);
 
+  // Assert
   EXPECT_EQ(crow::CONFLICT, response.code);
 }
 
-// Tests de GetTeam
+// ========== Tests para GetTeam ==========
 
-// Validar respuesta exitosa y contenido. Response 200
+// Validar que el valor transferido al delegate es el esperado. Simular resultado con objeto. Response 200
 TEST_F(TeamControllerTest, GetTeamById_Returns200AndBody) {
-  auto expectedTeam = std::make_shared<domain::Team>(domain::Team{"my-id", "Team Name"});
+  // Arrange
+  std::string teamId = "550e8400-e29b-41d4-a716-446655440000";
+  auto expectedTeam = std::make_shared<domain::Team>();
+  expectedTeam->Id = teamId;
+  expectedTeam->Name = "Team Name";
 
-  EXPECT_CALL(*teamDelegateMock, GetTeam(std::string_view("my-id")))
+  EXPECT_CALL(*teamDelegateMock, GetTeam(std::string_view(teamId)))
     .WillOnce(testing::Return(std::expected<std::shared_ptr<domain::Team>, Error>{std::in_place, expectedTeam}));
 
-  crow::response response = teamController->getTeam("my-id");
-  auto jsonResponse = crow::json::load(response.body);
+  // Act
+  crow::response response = teamController->getTeam(teamId);
+  auto jsonResponse = nlohmann::json::parse(response.body);
 
+  // Assert
   EXPECT_EQ(crow::OK, response.code);
-  EXPECT_EQ(expectedTeam->Id, jsonResponse["id"]);
-  EXPECT_EQ(expectedTeam->Name, jsonResponse["name"]);
+  EXPECT_EQ(expectedTeam->Id, jsonResponse["id"].get<std::string>());
+  EXPECT_EQ(expectedTeam->Name, jsonResponse["name"].get<std::string>());
 }
 
-// Validar respuesta NOT_FOUND. Response 404
+// Validar que el valor transferido al delegate es el esperado. Simular resultado nulo. Response 404
 TEST_F(TeamControllerTest, GetTeamById_NotFound_Returns404) {
-  EXPECT_CALL(*teamDelegateMock, GetTeam(std::string_view("missing-id")))
+  // Arrange
+  std::string teamId = "550e8400-e29b-41d4-a716-446655440001";
+
+  EXPECT_CALL(*teamDelegateMock, GetTeam(std::string_view(teamId)))
       .WillOnce(testing::Return(std::expected<std::shared_ptr<domain::Team>, Error>{std::unexpected(Error::NOT_FOUND)}));
 
-  crow::response response = teamController->getTeam("missing-id");
+  // Act
+  crow::response response = teamController->getTeam(teamId);
+
+  // Assert
   EXPECT_EQ(crow::NOT_FOUND, response.code);
 }
 
-// Tests de GetAllTeams
+// ========== Tests para GetAllTeams ==========
 
-// Validar respuesta exitosa con lista de equipos. Response 200
+// Simular resultado con lista de objetos. Response 200
 TEST_F(TeamControllerTest, GetAllTeams_ReturnsList200) {
-  std::vector<std::shared_ptr<domain::Team>> teams = {
-    std::make_shared<domain::Team>(domain::Team{"id1", "Team One"}),
-    std::make_shared<domain::Team>(domain::Team{"id2", "Team Two"})
-  };
+  // Arrange
+  std::vector<std::shared_ptr<domain::Team>> teams;
+  
+  auto team1 = std::make_shared<domain::Team>();
+  team1->Id = "550e8400-e29b-41d4-a716-446655440001";
+  team1->Name = "Team One";
+  
+  auto team2 = std::make_shared<domain::Team>();
+  team2->Id = "550e8400-e29b-41d4-a716-446655440002";
+  team2->Name = "Team Two";
+  
+  teams.push_back(team1);
+  teams.push_back(team2);
 
   EXPECT_CALL(*teamDelegateMock, GetAllTeams())
     .WillOnce(testing::Return(std::expected<std::vector<std::shared_ptr<domain::Team>>, Error>{std::in_place, teams}));
 
+  // Act
   crow::response response = teamController->getAllTeams();
-  auto jsonResponse = crow::json::load(response.body);
+  auto jsonResponse = nlohmann::json::parse(response.body);
 
+  // Assert
   EXPECT_EQ(crow::OK, response.code);
   ASSERT_EQ(jsonResponse.size(), teams.size());
-  EXPECT_EQ(jsonResponse[0]["id"], teams[0]->Id);
-  EXPECT_EQ(jsonResponse[1]["name"], teams[1]->Name);
+  EXPECT_EQ(jsonResponse[0]["id"].get<std::string>(), teams[0]->Id);
+  EXPECT_EQ(jsonResponse[0]["name"].get<std::string>(), teams[0]->Name);
+  EXPECT_EQ(jsonResponse[1]["id"].get<std::string>(), teams[1]->Id);
+  EXPECT_EQ(jsonResponse[1]["name"].get<std::string>(), teams[1]->Name);
 }
 
-// Validar respuesta exitosa con lista vacía. Response 200
+// Simular resultado con lista vacía. Response 200
 TEST_F(TeamControllerTest, GetAllTeams_ReturnsEmptyList200) {
+  // Arrange
+  std::vector<std::shared_ptr<domain::Team>> emptyTeams;
+
   EXPECT_CALL(*teamDelegateMock, GetAllTeams())
-    .WillOnce(testing::Return(std::expected<std::vector<std::shared_ptr<domain::Team>>, Error>{std::in_place}));
+    .WillOnce(testing::Return(std::expected<std::vector<std::shared_ptr<domain::Team>>, Error>{std::in_place, emptyTeams}));
 
+  // Act
   crow::response response = teamController->getAllTeams();
-  auto jsonResponse = crow::json::load(response.body);
+  auto jsonResponse = nlohmann::json::parse(response.body);
 
+  // Assert
   EXPECT_EQ(crow::OK, response.code);
   ASSERT_EQ(jsonResponse.size(), 0);
 }
 
-// Tests de UpdateTeam
+// ========== Tests para UpdateTeam ==========
 
-// Validacion del JSON y actualizacion exitosa. Response 200
+// Validación del JSON, transformación a objeto de dominio Team, actualización exitosa. Response 200 (nota: el controller retorna 200, no 204)
 TEST_F(TeamControllerTest, UpdateTeam_ValidJson_DelegatesAndReturns200) {
+  // Arrange
+  std::string teamId = "550e8400-e29b-41d4-a716-446655440000";
   domain::Team capturedTeam;
+  
   EXPECT_CALL(*teamDelegateMock, UpdateTeam(testing::_))
     .WillOnce(testing::DoAll(testing::SaveArg<0>(&capturedTeam),
-                             testing::Return(std::expected<std::string, Error>{std::in_place, "id1"})));
+                             testing::Return(std::expected<std::string, Error>{std::in_place, teamId})));
 
-  nlohmann::json teamRequestBody = {{"name", "updated team"}};
+  nlohmann::json teamRequestBody;
+  teamRequestBody["name"] = "Updated Team";
   crow::request teamRequest;
   teamRequest.body = teamRequestBody.dump();
 
-  crow::response response = teamController->updateTeam(teamRequest, "id1");
+  // Act
+  crow::response response = teamController->updateTeam(teamRequest, teamId);
 
+  // Assert
   EXPECT_EQ(crow::OK, response.code);
-  EXPECT_EQ("id1", capturedTeam.Id);
+  EXPECT_EQ(teamId, capturedTeam.Id);
   EXPECT_EQ(teamRequestBody.at("name").get<std::string>(), capturedTeam.Name);
 }
 
-// Validacion del JSON y equipo no encontrado. Response 404
+// Validación del JSON, transformación a objeto de dominio Team, ID no encontrado. Response 404
 TEST_F(TeamControllerTest, UpdateTeam_NotFound_Returns404) {
+  // Arrange
+  std::string teamId = "550e8400-e29b-41d4-a716-446655440001";
+  
   EXPECT_CALL(*teamDelegateMock, UpdateTeam(testing::_))
     .WillOnce(testing::Return(std::expected<std::string, Error>{std::unexpected(Error::NOT_FOUND)}));
 
-  nlohmann::json teamRequestBody = {{"name", "not found"}};
+  nlohmann::json teamRequestBody;
+  teamRequestBody["name"] = "Not Found Team";
   crow::request teamRequest;
   teamRequest.body = teamRequestBody.dump();
 
-  crow::response response = teamController->updateTeam(teamRequest, "id404");
+  // Act
+  crow::response response = teamController->updateTeam(teamRequest, teamId);
 
+  // Assert
   EXPECT_EQ(crow::NOT_FOUND, response.code);
 }
