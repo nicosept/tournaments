@@ -48,17 +48,11 @@ public:
     MOCK_METHOD(std::vector<std::shared_ptr<domain::Team>>, ReadAll, (), (override));
 };
 
-class MockQueueMessageProducer : public IQueueMessageProducer {
-public:
-    MOCK_METHOD(void, SendMessage, (const std::string_view& message, const std::string_view& queue), (override));
-};
-
 class GroupDelegateTest : public ::testing::Test {
     protected:
     std::shared_ptr<MockTournamentRepository> mockTournamentRepository;
     std::shared_ptr<MockGroupRepository> mockGroupRepository;
     std::shared_ptr<MockTeamRepository> mockTeamRepository;
-    std::shared_ptr<MockQueueMessageProducer> mockMessageProducer;
     std::shared_ptr<GroupDelegate> groupDelegate;
     
     const std::string validTournamentId = "12345678-1234-1234-1234-123456789abc";
@@ -69,12 +63,11 @@ class GroupDelegateTest : public ::testing::Test {
         mockTournamentRepository = std::make_shared<MockTournamentRepository>();
         mockGroupRepository = std::make_shared<MockGroupRepository>();
         mockTeamRepository = std::make_shared<MockTeamRepository>();
-        mockMessageProducer = std::make_shared<MockQueueMessageProducer>();
         groupDelegate = std::make_shared<GroupDelegate>(mockTournamentRepository, mockGroupRepository, mockTeamRepository);
     }
 };
 
-//======================= CreateGroup TESTS ========================
+// Tests de CreateGroup
 
 // Validar creacion exitosa de grupo y que se genere evento
 TEST_F(GroupDelegateTest, CreateGroup_Id) {
@@ -128,7 +121,7 @@ TEST_F(GroupDelegateTest, CreateGroup_Error) {
     EXPECT_EQ(result.error(), Error::DUPLICATE);
 }
 
-// Test 3: Validar error cuando se alcanza numero maximo de equipos
+// Validar error cuando se alcanza numero maximo de equipos
 TEST_F(GroupDelegateTest, CreateGroup_MaxTeams) {
     domain::Group group{"Test Group", "test-group"};
     for (int i = 0; i < 32; ++i) {
@@ -153,7 +146,7 @@ TEST_F(GroupDelegateTest, CreateGroup_MaxTeams) {
     EXPECT_TRUE(result.error() == Error::INVALID_FORMAT || result.error() == Error::NOT_FOUND);
 }
 
-//======================= GetGroup TESTS ========================
+// Tests de GetGroup
 
 // Validar busqueda exitosa de grupo por ID y torneo por ID
 TEST_F(GroupDelegateTest, GetGroup_Ok) {
@@ -198,7 +191,7 @@ TEST_F(GroupDelegateTest, GetGroup_NotFound) {
     EXPECT_EQ(result.error(), Error::NOT_FOUND);
 }
 
-//======================= UpdateGroup TESTS ========================
+// Tests de UpdateGroup
 
 // Validar actualizacion exitosa de grupo
 TEST_F(GroupDelegateTest, UpdateGroup_Ok) {
@@ -251,7 +244,7 @@ TEST_F(GroupDelegateTest, UpdateGroup_NotFound) {
     EXPECT_EQ(result.error(), Error::NOT_FOUND);
 }
 
-//======================= UpdateTeams (AddTeamToGroup) TESTS ========================
+// Tests de UpdateTeams
 
 // Validar agregar equipo exitosamente a grupo y que se publique mensaje
 TEST_F(GroupDelegateTest, UpdateTeams_Ok) {
