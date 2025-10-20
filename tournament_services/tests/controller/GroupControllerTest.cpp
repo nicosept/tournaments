@@ -34,9 +34,10 @@ class GroupControllerTest : public ::testing::Test {
     }
 };
 
-// Test 1: POST /tournaments/{tournamentId}/groups
-// Validar transformación de JSON al objeto de dominio Group y validar que el valor que se le transfiera a GroupDelegate es el esperado. Validar que la respuesta de esta función sea HTTP 201
-TEST_F(GroupControllerTest, CreateGroup_ValidJsonTransformation_ReturnsHttp201) {
+// Tests de CreateGroup
+
+// Validar transformacion de JSON al objeto de dominio Group y validar que el valor que se le transfiera a GroupDelegate es el esperado. Validar que la respuesta de esta funcion sea HTTP 201
+TEST_F(GroupControllerTest, CreateGroup_Created) {
     std::string tournamentId = "12345678-1234-1234-1234-123456789abc";
     std::string expectedGroupId = "87654321-4321-4321-4321-123456789012";
     
@@ -48,7 +49,6 @@ TEST_F(GroupControllerTest, CreateGroup_ValidJsonTransformation_ReturnsHttp201) 
         })}
     };
     
-    // Validar que el Group creado desde JSON tenga los valores esperados
     EXPECT_CALL(*groupDelegateMock, CreateGroup(
         testing::Eq(tournamentId),
         testing::AllOf(
@@ -76,9 +76,8 @@ TEST_F(GroupControllerTest, CreateGroup_ValidJsonTransformation_ReturnsHttp201) 
     EXPECT_EQ(expectedGroupId, response.get_header_value("location"));
 }
 
-// Test 2: POST /tournaments/{tournamentId}/groups
-// Validar transformación de JSON al objeto de dominio Group y validar que el valor que se le transfiera a GroupDelegate es el esperado. Simular error de inserción en la base de datos y validar la respuesta HTTP 409
-TEST_F(GroupControllerTest, CreateGroup_DatabaseDuplicateError_ReturnsHttp409) {
+// Validar transformacion de JSON al objeto de dominio Group y validar que el valor que se le transfiera a GroupDelegate es el esperado. Simular error de insercion en la base de datos y validar la respuesta HTTP 409
+TEST_F(GroupControllerTest, CreateGroup_Conflict) {
     std::string tournamentId = "12345678-1234-1234-1234-123456789abc";
     
     nlohmann::json requestJson = {
@@ -99,9 +98,10 @@ TEST_F(GroupControllerTest, CreateGroup_DatabaseDuplicateError_ReturnsHttp409) {
     EXPECT_EQ("Error", response.body);
 }
 
-// Test 3: GET /tournaments/{tournamentId}/groups/{groupId}
+// Tests de GetGroup
+
 // Validar que el valor que se le transfiera a GroupDelegate es el esperado. Simular el resultado con un objeto y validar la respuesta HTTP 200
-TEST_F(GroupControllerTest, GetGroup_ValidIds_ReturnsHttp200) {
+TEST_F(GroupControllerTest, GetGroup_Ok) {
     std::string tournamentId = "12345678-1234-1234-1234-123456789abc";
     std::string groupId = "87654321-4321-4321-4321-123456789012";
     
@@ -129,9 +129,8 @@ TEST_F(GroupControllerTest, GetGroup_ValidIds_ReturnsHttp200) {
     EXPECT_EQ("Team One", jsonResponse["teams"][0]["name"]);
 }
 
-// Test 4: GET /tournaments/{tournamentId}/groups/{groupId}
 // Validar que el valor que se le transfiera a GroupDelegate es el esperado. Simular el resultado nulo y validar la respuesta HTTP 404
-TEST_F(GroupControllerTest, GetGroup_GroupNotFound_ReturnsHttp404) {
+TEST_F(GroupControllerTest, GetGroup_NotFound) {
     std::string tournamentId = "12345678-1234-1234-1234-123456789abc";
     std::string groupId = "87654321-4321-4321-4321-123456789999";
     
@@ -146,9 +145,10 @@ TEST_F(GroupControllerTest, GetGroup_GroupNotFound_ReturnsHttp404) {
     EXPECT_EQ("Error", response.body);
 }
 
-// Test 5: PATCH /tournaments/{tournamentId}/groups/{groupId}
-// Validar transformación de JSON al objeto de dominio Group y validar que el valor que se le transfiera a GroupDelegate es el esperado. Validar que la respuesta de esta función sea HTTP 204
-TEST_F(GroupControllerTest, UpdateGroup_ValidJsonTransformation_ReturnsHttp204) {
+// Tests de UpdateGroup
+
+// Validar transformacion de JSON al objeto de dominio Group y validar que el valor que se le transfiera a GroupDelegate es el esperado. Validar que la respuesta de esta funcion sea HTTP 204
+TEST_F(GroupControllerTest, UpdateGroup_NoContent) {
     std::string tournamentId = "12345678-1234-1234-1234-123456789abc";
     std::string groupId = "87654321-4321-4321-4321-123456789012";
     
@@ -182,9 +182,8 @@ TEST_F(GroupControllerTest, UpdateGroup_ValidJsonTransformation_ReturnsHttp204) 
     EXPECT_EQ(crow::NO_CONTENT, response.code);
 }
 
-// Test 6: PATCH /tournaments/{tournamentId}/groups/{groupId}
-// Validar transformación de JSON al objeto de dominio Group y validar que el valor que se le transfiera a GroupDelegate es el esperado. Simular ID no encontrado en el Delegate y validar que la respuesta de esta función sea HTTP 404
-TEST_F(GroupControllerTest, UpdateGroup_GroupNotFound_ReturnsHttp404) {
+// Validar transformacion de JSON al objeto de dominio Group y validar que el valor que se le transfiera a GroupDelegate es el esperado. Simular ID no encontrado en el Delegate y validar que la respuesta de esta funcion sea HTTP 404
+TEST_F(GroupControllerTest, UpdateGroup_NotFound) {
     std::string tournamentId = "12345678-1234-1234-1234-123456789abc";
     std::string groupId = "87654321-4321-4321-4321-123456789999";
     
@@ -207,9 +206,10 @@ TEST_F(GroupControllerTest, UpdateGroup_GroupNotFound_ReturnsHttp404) {
     EXPECT_EQ("Error", response.body);
 }
 
-// Test 7: PATCH /tournaments/{tournamentId}/groups/{groupId}/teams (AddTeams)
-// Validar transformación de JSON al objeto de dominio Team y validar que el valor que se le transfiera a GroupDelegate es el esperado. Validar que la respuesta de esta función sea HTTP 204
-TEST_F(GroupControllerTest, AddTeams_ValidJsonTransformation_ReturnsHttp204) {
+// Tests de AddTeams
+
+// Validar transformacion de JSON al objeto de dominio Team y validar que el valor que se le transfiera a GroupDelegate es el esperado. Validar que la respuesta de esta funcion sea HTTP 204
+TEST_F(GroupControllerTest, AddTeams_NoContent) {
     std::string tournamentId = "12345678-1234-1234-1234-123456789abc";
     std::string groupId = "87654321-4321-4321-4321-123456789012";
     
@@ -242,9 +242,8 @@ TEST_F(GroupControllerTest, AddTeams_ValidJsonTransformation_ReturnsHttp204) {
     EXPECT_EQ(crow::NO_CONTENT, response.code);
 }
 
-// Test 8: PATCH /tournaments/{tournamentId}/groups/{groupId}/teams (AddTeams)
-// Validar transformación de JSON al objeto de dominio Team y validar que el valor que se le transfiera a GroupDelegate es el esperado. Simular que el equipo no exista y el resultado sea HTTP 422
-TEST_F(GroupControllerTest, AddTeams_TeamNotExists_ReturnsHttp422) {
+// Validar transformacion de JSON al objeto de dominio Team y validar que el valor que se le transfiera a GroupDelegate es el esperado. Simular que el equipo no exista y el resultado sea HTTP 422
+TEST_F(GroupControllerTest, AddTeams_UnprocessableEntity) {
     std::string tournamentId = "12345678-1234-1234-1234-123456789abc";
     std::string groupId = "87654321-4321-4321-4321-123456789012";
     
@@ -273,9 +272,8 @@ TEST_F(GroupControllerTest, AddTeams_TeamNotExists_ReturnsHttp422) {
     EXPECT_EQ("Error", response.body);
 }
 
-// Test 9: PATCH /tournaments/{tournamentId}/groups/{groupId}/teams (AddTeams)
-// Validar transformación de JSON al objeto de dominio Team y validar que el valor que se le transfiera a GroupDelegate es el esperado. Simular que el grupo este lleno el resultado sea HTTP 422
-TEST_F(GroupControllerTest, AddTeams_GroupFull_ReturnsHttp422) {
+// Validar transformacion de JSON al objeto de dominio Team y validar que el valor que se le transfiera a GroupDelegate es el esperado. Simular que el grupo este lleno el resultado sea HTTP 422
+TEST_F(GroupControllerTest, AddTeams_GroupFull) {
     std::string tournamentId = "12345678-1234-1234-1234-123456789abc";
     std::string groupId = "87654321-4321-4321-4321-123456789012";
     
