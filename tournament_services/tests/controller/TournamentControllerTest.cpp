@@ -10,7 +10,7 @@ class TournamentDelegateMock : public ITournamentDelegate {
 public:
   MOCK_METHOD((std::expected<std::shared_ptr<domain::Tournament>, Error>), GetTournament,
               (std::string_view id), (override));
-  MOCK_METHOD((std::expected<std::vector<std::shared_ptr<domain::Tournament>>, Error>), GetAllTournaments, (), (override));
+  MOCK_METHOD((std::expected<std::vector<std::shared_ptr<domain::Tournament>>, Error>), ReadAll, (), (override));
   MOCK_METHOD((std::expected<std::string, Error>), CreateTournament, (const domain::Tournament&), (override));
   MOCK_METHOD((std::expected<std::string, Error>), UpdateTournament, (const domain::Tournament&), (override));
   MOCK_METHOD((std::expected<void, Error>), DeleteTournament, (std::string_view id), (override));
