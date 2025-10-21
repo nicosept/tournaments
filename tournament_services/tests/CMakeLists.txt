@@ -4,7 +4,7 @@ set(TEST_SOURCES
         controller/TeamControllerTest.cpp
         controller/TournamentControllerTest.cpp
         controller/GroupControllerTest.cpp
-        #delegate/TeamDelegateTest.cpp
+        delegate/TeamDelegateTest.cpp
         delegate/TournamentDelegateTest.cpp
         delegate/GroupDelegateTest.cpp
         ../src/controller/TeamController.cpp

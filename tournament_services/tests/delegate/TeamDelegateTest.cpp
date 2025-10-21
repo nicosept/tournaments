@@ -2,6 +2,7 @@
 #include <gmock/gmock.h>
 #include <memory>
 #include <expected>
+#include <pqxx/pqxx>
 
 #include "domain/Team.hpp"
 #include "delegate/TeamDelegate.hpp"
@@ -54,7 +55,7 @@ TEST_F(TeamDelegateTest, CreateTeam_Error) {
   duplicateTeam.Name = "Duplicate Team";
 
   EXPECT_CALL(*mockRepository, Create(testing::Field(&domain::Team::Name, "Duplicate Team")))
-    .WillOnce(testing::Throw(pqxx::unique_violation("23505")));
+    .WillOnce(testing::Throw(pqxx::unique_violation("duplicate key value violates unique constraint", "", "23505")));
 
   auto result = teamDelegate->CreateTeam(duplicateTeam);
 

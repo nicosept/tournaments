@@ -143,7 +143,7 @@ TEST_F(GroupDelegateTest, CreateGroup_MaxTeams) {
     auto result = groupDelegate->CreateGroup(validTournamentId, group);
 
     ASSERT_FALSE(result.has_value());
-    EXPECT_TRUE(result.error() == Error::INVALID_FORMAT || result.error() == Error::NOT_FOUND);
+    EXPECT_EQ(result.error(), Error::INVALID_FORMAT); 
 }
 
 // Tests de GetGroup
