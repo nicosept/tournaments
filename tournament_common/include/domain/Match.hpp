@@ -16,6 +16,8 @@ namespace domain {
     };
     class Match {
         /* data */
+        std::string id;
+        std::string tournamentId;
         std::string homeTeamId;
         std::string visitorTeamId;
         Score score;
@@ -25,6 +27,23 @@ namespace domain {
 
     public:
         Match(/* args */){}
+
+        [[nodiscard]] std::string Id() const {
+            return  id;
+        }
+
+        std::string& Id() {
+            return  id;
+        }
+
+        [[nodiscard]] std::string TournamentId() const {
+            return  tournamentId;
+        }
+
+        [[nodiscard]] std::string & TournamentId() {
+            return  tournamentId;
+        }
+
         [[nodiscard]] std::string HomeTeamId() const {
             return homeTeamId;
         }
