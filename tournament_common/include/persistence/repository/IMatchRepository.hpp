@@ -6,6 +6,7 @@
 #include <memory>
 
 #include "domain/Match.hpp"
+#include "IRepository.hpp"
 
 class IMatchRepository : public IRepository<domain::Match, std::string> {
 public:
