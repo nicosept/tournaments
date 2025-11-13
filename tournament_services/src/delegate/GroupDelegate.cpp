@@ -74,10 +74,9 @@ std::expected<std::string, Error> GroupDelegate::CreateGroup(const std::string_v
     if (group.Teams().size() > 32) {
         return std::unexpected(Error::UNPROCESSABLE_ENTITY);
     }
-    domain::Group g = group;
-    g.TournamentId() = tournament->Id();
-    if (!g.Teams().empty()) {
-        for (auto& t : g.Teams()) {
+    // Validacion de equipos si los hay
+    if (!group.Teams().empty()) {
+        for (auto& t : group.Teams()) {
             // Validacion de formato UUID de cada equipo
             if (!std::regex_match(t.Id, ID_VALUE)) {
                 return std::unexpected(Error::INVALID_FORMAT);
@@ -90,15 +89,22 @@ std::expected<std::string, Error> GroupDelegate::CreateGroup(const std::string_v
         }
     }
     
+    // Crear el grupo solo con el nombre (sin equipos)
+    domain::Group g = group;
+    g.TournamentId() = tournament->Id();
+    g.Teams().clear(); // No se agregan equipos en la creación
+    
     try {
         auto id = groupRepository->Create(g);
         
-        if (!g.Teams().empty()) {
-            std::unique_ptr<nlohmann::json> message = std::make_unique<nlohmann::json>();
-            message->emplace("tournamentId", tournamentId);
-            message->emplace("groupId", id);
-            message->emplace("teamId", ""); 
-            messageProducer->SendMessage(message->dump(), "tournament.team-add");
+        // Si hay equipos, agregarlos usando UpdateTeams
+        if (!group.Teams().empty()) {
+            auto updateResult = UpdateTeams(tournamentId, id, group.Teams());
+            if (!updateResult) {
+                // Si falla agregar equipos, eliminar el grupo creado
+                groupRepository->Delete(id);
+                return std::unexpected(updateResult.error());
+            }
         }
         
         return id;

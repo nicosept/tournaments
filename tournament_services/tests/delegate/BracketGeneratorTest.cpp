@@ -223,7 +223,7 @@ TEST_F(BracketGeneratorTest, ThrowsExceptionForWrongNumberOfTeams) {
     for (int i = 0; i < 16; ++i) {
         domain::Team team;
         team.Id = "team-" + std::to_string(i);
-        teams.push_back(team);
+        wrongTeams.push_back(team);
     }
     
     EXPECT_THROW(generator->GenerateMatches(tournamentId, wrongTeams), std::invalid_argument);
