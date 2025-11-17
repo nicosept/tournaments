@@ -45,8 +45,11 @@ std::expected<std::string, Error> MatchDelegate::UpdateMatchScore(const domain::
     return std::unexpected(Error::NOT_FOUND);
   }
 
+
   const auto& score = match.MatchScore();
-  if (score.homeTeamScore < 0 || score.visitorTeamScore < 0) {
+  // Regla de negocio: No se permiten empates en doble eliminación (0-0)
+  if ((score.homeTeamScore == score.visitorTeamScore) ||
+      score.homeTeamScore < 0 || score.visitorTeamScore < 0) {
     return std::unexpected(Error::INVALID_FORMAT);
   }
 

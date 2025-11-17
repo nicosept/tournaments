@@ -342,16 +342,16 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_BothScoresNegative) {
     EXPECT_EQ(result.error(), Error::INVALID_FORMAT);
 }
 
-// REGLA DE NEGOCIO: Validar marcadores validos (0-0 es valido, puede ser empate en fase regular)
-TEST_F(MatchDelegateTest, UpdateMatchScore_ZeroZeroScore) {
+// REGLA DE NEGOCIO: No se permiten empates en doble eliminación
+TEST_F(MatchDelegateTest, UpdateMatchScore_TieScore) {
     std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
     std::string matchId = "880e8400-e29b-41d4-a716-446655440003";
 
     domain::Match match;
     match.Id() = matchId;
     match.TournamentId() = tournamentId;
-    match.MatchScore().homeTeamScore = 0;
-    match.MatchScore().visitorTeamScore = 0;
+    match.MatchScore().homeTeamScore = 2;
+    match.MatchScore().visitorTeamScore = 2;
 
     auto existingMatch = std::make_shared<domain::Match>();
     existingMatch->Id() = matchId;
@@ -360,15 +360,10 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_ZeroZeroScore) {
     EXPECT_CALL(*mockMatchRepository, FindByTournamentIdAndMatchId(tournamentId, matchId))
         .WillOnce(testing::Return(existingMatch));
 
-    EXPECT_CALL(*mockMatchRepository, UpdateMatchScore(matchId, testing::_))
-        .Times(1);
-
-    EXPECT_CALL(*mockMessageProducer, SendMessage(testing::_, testing::_))
-        .Times(1);
-
     auto result = matchDelegate->UpdateMatchScore(match);
 
-    ASSERT_TRUE(result.has_value());
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), Error::INVALID_FORMAT);
 }
 
 // Validar que el mensaje enviado contiene los datos correctos
