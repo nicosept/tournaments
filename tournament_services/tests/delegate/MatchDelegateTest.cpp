@@ -12,7 +12,6 @@
 #include "cms/IQueueMessageProducer.hpp"
 #include "exception/Error.hpp"
 
-// Mock del repositorio de Matches
 class MockMatchRepository : public IMatchRepository {
 public:
     MOCK_METHOD(std::shared_ptr<domain::Match>, FindByTournamentIdAndMatchId,
@@ -27,7 +26,6 @@ public:
     MOCK_METHOD(bool, MatchesExistForTournament, (const std::string_view& tournamentId), (override));
 };
 
-// Mock del repositorio de Tournaments
 class MockTournamentRepository : public IRepository<domain::Tournament, std::string> {
 public:
     MOCK_METHOD(std::shared_ptr<domain::Tournament>, ReadById, (std::string id), (override));
@@ -37,7 +35,6 @@ public:
     MOCK_METHOD(std::vector<std::shared_ptr<domain::Tournament>>, ReadAll, (), (override));
 };
 
-// Adapter para que TournamentRepository pueda usar el mock
 class TournamentRepositoryAdapter : public TournamentRepository {
 private:
     std::shared_ptr<IRepository<domain::Tournament, std::string>> mock;
@@ -64,7 +61,6 @@ public:
     std::vector<std::shared_ptr<domain::Tournament>> ReadAll() override { return mock->ReadAll(); }
 };
 
-// Mock del productor de mensajes
 class MockQueueMessageProducer : public IQueueMessageProducer {
 public:
     MOCK_METHOD(void, SendMessage, (const std::string_view& message, const std::string_view& destination), (override));
@@ -82,7 +78,6 @@ protected:
         mockTournamentRepository = std::make_shared<MockTournamentRepository>();
         mockMessageProducer = std::make_shared<MockQueueMessageProducer>();
         
-        // Usar el adapter para que MatchDelegate pueda usar el mock
         auto tournamentRepositoryAdapter = std::make_shared<TournamentRepositoryAdapter>(mockTournamentRepository);
         
         matchDelegate = std::make_shared<MatchDelegate>(
@@ -93,10 +88,10 @@ protected:
     }
 };
 
-
+// ============================================================================
 // Tests de GetMatches
+// ============================================================================
 
-// Validar busqueda exitosa de matches por tournament ID
 TEST_F(MatchDelegateTest, GetMatches_Ok) {
     std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
 
@@ -125,7 +120,6 @@ TEST_F(MatchDelegateTest, GetMatches_Ok) {
     EXPECT_EQ(result.value().size(), 2);
 }
 
-// Validar error cuando el torneo no existe
 TEST_F(MatchDelegateTest, GetMatches_TournamentNotFound) {
     std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
 
@@ -138,7 +132,6 @@ TEST_F(MatchDelegateTest, GetMatches_TournamentNotFound) {
     EXPECT_EQ(result.error(), Error::NOT_FOUND);
 }
 
-// Validar formato invalido de tournament ID
 TEST_F(MatchDelegateTest, GetMatches_InvalidFormat) {
     std::string invalidTournamentId = "invalid-id-format!@#";
 
@@ -148,7 +141,6 @@ TEST_F(MatchDelegateTest, GetMatches_InvalidFormat) {
     EXPECT_EQ(result.error(), Error::INVALID_FORMAT);
 }
 
-// Validar lista vacia de matches
 TEST_F(MatchDelegateTest, GetMatches_Empty) {
     std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
 
@@ -173,7 +165,6 @@ TEST_F(MatchDelegateTest, GetMatches_Empty) {
 // Tests de GetMatch
 // ============================================================================
 
-// Validar busqueda exitosa de un match especifico
 TEST_F(MatchDelegateTest, GetMatch_Ok) {
     std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
     std::string matchId = "880e8400-e29b-41d4-a716-446655440003";
@@ -201,7 +192,6 @@ TEST_F(MatchDelegateTest, GetMatch_Ok) {
     EXPECT_EQ(retrievedMatch->TournamentId(), tournamentId);
 }
 
-// Validar error cuando el torneo no existe
 TEST_F(MatchDelegateTest, GetMatch_TournamentNotFound) {
     std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
     std::string matchId = "880e8400-e29b-41d4-a716-446655440003";
@@ -215,7 +205,6 @@ TEST_F(MatchDelegateTest, GetMatch_TournamentNotFound) {
     EXPECT_EQ(result.error(), Error::NOT_FOUND);
 }
 
-// Validar formato invalido de IDs
 TEST_F(MatchDelegateTest, GetMatch_InvalidFormat) {
     std::string invalidTournamentId = "invalid!@#";
     std::string matchId = "880e8400-e29b-41d4-a716-446655440003";
@@ -227,10 +216,9 @@ TEST_F(MatchDelegateTest, GetMatch_InvalidFormat) {
 }
 
 // ============================================================================
-// Tests de UpdateMatchScore - Reglas de Negocio
+// Tests de UpdateMatchScore
 // ============================================================================
 
-// Validar actualizacion exitosa del marcador y envio de mensaje
 TEST_F(MatchDelegateTest, UpdateMatchScore_Ok) {
     std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
     std::string matchId = "880e8400-e29b-41d4-a716-446655440003";
@@ -248,11 +236,23 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_Ok) {
     EXPECT_CALL(*mockMatchRepository, FindByTournamentIdAndMatchId(tournamentId, matchId))
         .WillOnce(testing::Return(existingMatch));
 
-    EXPECT_CALL(*mockMatchRepository, UpdateMatchScore(matchId, testing::_))
-        .Times(1);
+    EXPECT_CALL(*mockMatchRepository, UpdateMatchScore(
+        testing::Eq(matchId), 
+        testing::AllOf(
+            testing::Field(&domain::Score::homeTeamScore, 3),
+            testing::Field(&domain::Score::visitorTeamScore, 2)
+        )
+    )).Times(1);
 
-    EXPECT_CALL(*mockMessageProducer, SendMessage(testing::_, testing::_))
-        .Times(1);
+    EXPECT_CALL(*mockMessageProducer, SendMessage(
+        testing::AllOf(
+            testing::HasSubstr("\"tournamentId\":\"" + tournamentId + "\""),
+            testing::HasSubstr("\"matchId\":\"" + matchId + "\""),
+            testing::HasSubstr("\"homeTeamScore\":3"),
+            testing::HasSubstr("\"visitorTeamScore\":2")
+        ),
+        testing::Not(testing::IsEmpty())
+    )).Times(1);
 
     auto result = matchDelegate->UpdateMatchScore(match);
 
@@ -260,7 +260,6 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_Ok) {
     EXPECT_EQ(result.value(), matchId);
 }
 
-// Validar error cuando el match no existe
 TEST_F(MatchDelegateTest, UpdateMatchScore_MatchNotFound) {
     std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
     std::string matchId = "990e8400-e29b-41d4-a716-446655440099";
@@ -271,8 +270,10 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_MatchNotFound) {
     match.MatchScore().homeTeamScore = 3;
     match.MatchScore().visitorTeamScore = 2;
 
-    EXPECT_CALL(*mockMatchRepository, FindByTournamentIdAndMatchId(tournamentId, matchId))
-        .WillOnce(testing::Return(nullptr));
+    EXPECT_CALL(*mockMatchRepository, FindByTournamentIdAndMatchId(
+        testing::Eq(tournamentId), 
+        testing::Eq(matchId)
+    )).WillOnce(testing::Return(nullptr));
 
     auto result = matchDelegate->UpdateMatchScore(match);
 
@@ -280,7 +281,6 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_MatchNotFound) {
     EXPECT_EQ(result.error(), Error::NOT_FOUND);
 }
 
-// Validar error con formato invalido de IDs
 TEST_F(MatchDelegateTest, UpdateMatchScore_InvalidFormat) {
     domain::Match match;
     match.Id() = "invalid!@#";
@@ -294,7 +294,6 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_InvalidFormat) {
     EXPECT_EQ(result.error(), Error::INVALID_FORMAT);
 }
 
-// REGLA DE NEGOCIO: Validar que los scores no sean negativos
 TEST_F(MatchDelegateTest, UpdateMatchScore_NegativeScore) {
     std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
     std::string matchId = "880e8400-e29b-41d4-a716-446655440003";
@@ -302,15 +301,20 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_NegativeScore) {
     domain::Match match;
     match.Id() = matchId;
     match.TournamentId() = tournamentId;
-    match.MatchScore().homeTeamScore = -1; // Score negativo
+    match.MatchScore().homeTeamScore = -1;
     match.MatchScore().visitorTeamScore = 2;
 
     auto existingMatch = std::make_shared<domain::Match>();
     existingMatch->Id() = matchId;
     existingMatch->TournamentId() = tournamentId;
 
-    EXPECT_CALL(*mockMatchRepository, FindByTournamentIdAndMatchId(tournamentId, matchId))
-        .WillOnce(testing::Return(existingMatch));
+    EXPECT_CALL(*mockMatchRepository, FindByTournamentIdAndMatchId(
+        testing::Eq(tournamentId), 
+        testing::Eq(matchId)
+    )).WillOnce(testing::Return(existingMatch));
+
+    EXPECT_CALL(*mockMatchRepository, UpdateMatchScore(testing::_, testing::_)).Times(0);
+    EXPECT_CALL(*mockMessageProducer, SendMessage(testing::_, testing::_)).Times(0);
 
     auto result = matchDelegate->UpdateMatchScore(match);
 
@@ -318,7 +322,6 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_NegativeScore) {
     EXPECT_EQ(result.error(), Error::INVALID_FORMAT);
 }
 
-// REGLA DE NEGOCIO: Validar que ambos scores no sean negativos
 TEST_F(MatchDelegateTest, UpdateMatchScore_BothScoresNegative) {
     std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
     std::string matchId = "880e8400-e29b-41d4-a716-446655440003";
@@ -333,8 +336,13 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_BothScoresNegative) {
     existingMatch->Id() = matchId;
     existingMatch->TournamentId() = tournamentId;
 
-    EXPECT_CALL(*mockMatchRepository, FindByTournamentIdAndMatchId(tournamentId, matchId))
-        .WillOnce(testing::Return(existingMatch));
+    EXPECT_CALL(*mockMatchRepository, FindByTournamentIdAndMatchId(
+        testing::Eq(tournamentId), 
+        testing::Eq(matchId)
+    )).WillOnce(testing::Return(existingMatch));
+
+    EXPECT_CALL(*mockMatchRepository, UpdateMatchScore(testing::_, testing::_)).Times(0);
+    EXPECT_CALL(*mockMessageProducer, SendMessage(testing::_, testing::_)).Times(0);
 
     auto result = matchDelegate->UpdateMatchScore(match);
 
@@ -342,7 +350,6 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_BothScoresNegative) {
     EXPECT_EQ(result.error(), Error::INVALID_FORMAT);
 }
 
-// REGLA DE NEGOCIO: No se permiten empates en doble eliminación
 TEST_F(MatchDelegateTest, UpdateMatchScore_TieScore) {
     std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
     std::string matchId = "880e8400-e29b-41d4-a716-446655440003";
@@ -357,8 +364,13 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_TieScore) {
     existingMatch->Id() = matchId;
     existingMatch->TournamentId() = tournamentId;
 
-    EXPECT_CALL(*mockMatchRepository, FindByTournamentIdAndMatchId(tournamentId, matchId))
-        .WillOnce(testing::Return(existingMatch));
+    EXPECT_CALL(*mockMatchRepository, FindByTournamentIdAndMatchId(
+        testing::Eq(tournamentId), 
+        testing::Eq(matchId)
+    )).WillOnce(testing::Return(existingMatch));
+
+    EXPECT_CALL(*mockMatchRepository, UpdateMatchScore(testing::_, testing::_)).Times(0);
+    EXPECT_CALL(*mockMessageProducer, SendMessage(testing::_, testing::_)).Times(0);
 
     auto result = matchDelegate->UpdateMatchScore(match);
 
@@ -366,7 +378,6 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_TieScore) {
     EXPECT_EQ(result.error(), Error::INVALID_FORMAT);
 }
 
-// Validar que el mensaje enviado contiene los datos correctos
 TEST_F(MatchDelegateTest, UpdateMatchScore_MessageContainsCorrectData) {
     std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
     std::string matchId = "880e8400-e29b-41d4-a716-446655440003";
@@ -381,13 +392,19 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_MessageContainsCorrectData) {
     existingMatch->Id() = matchId;
     existingMatch->TournamentId() = tournamentId;
 
-    EXPECT_CALL(*mockMatchRepository, FindByTournamentIdAndMatchId(tournamentId, matchId))
-        .WillOnce(testing::Return(existingMatch));
+    EXPECT_CALL(*mockMatchRepository, FindByTournamentIdAndMatchId(
+        testing::Eq(tournamentId), 
+        testing::Eq(matchId)
+    )).WillOnce(testing::Return(existingMatch));
 
-    EXPECT_CALL(*mockMatchRepository, UpdateMatchScore(matchId, testing::_))
-        .Times(1);
+    EXPECT_CALL(*mockMatchRepository, UpdateMatchScore(
+        testing::Eq(matchId),
+        testing::AllOf(
+            testing::Field(&domain::Score::homeTeamScore, 5),
+            testing::Field(&domain::Score::visitorTeamScore, 3)
+        )
+    )).Times(1);
 
-    // Validar que el mensaje JSON contenga los campos correctos
     EXPECT_CALL(*mockMessageProducer, SendMessage(
         testing::AllOf(
             testing::HasSubstr("\"tournamentId\":\"" + tournamentId + "\""),
@@ -395,7 +412,7 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_MessageContainsCorrectData) {
             testing::HasSubstr("\"homeTeamScore\":5"),
             testing::HasSubstr("\"visitorTeamScore\":3")
         ),
-        testing::_
+        testing::Not(testing::IsEmpty())
     )).Times(1);
 
     auto result = matchDelegate->UpdateMatchScore(match);
