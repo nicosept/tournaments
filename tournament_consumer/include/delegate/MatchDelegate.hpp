@@ -11,7 +11,6 @@
 #include "event/TeamAddEvent.hpp"
 #include "event/ScoreUpdateEvent.hpp"
 #include "delegate/BracketGenerator.hpp"
-#include "domain/Match.hpp"
 #include "persistence/repository/GroupRepository.hpp"
 #include "persistence/repository/IMatchRepository.hpp"
 
@@ -44,82 +43,6 @@ inline void MatchDelegate::ProcessTeamAddition(const domain::TeamAddEvent& teamA
         auto matches = bracketGenerator->GenerateMatches(teamAddEvent.tournamentId, group->Teams());
         // Bulk insert matches into the repository
         matchRepository->CreateBulk(matches);
-        
-        // Automatically play the entire tournament
-        std::cout << "[MatchDelegate] Auto-playing entire tournament..." << std::endl;
-        
-        // Play all winners bracket matches (W0-W30)
-        std::cout << "[MatchDelegate] Playing Winners Bracket (W0-W30)..." << std::endl;
-        for (int i = 0; i <= 30; ++i) {
-            std::string matchName = "W" + std::to_string(i);
-            auto match = matchRepository->FindByTournamentIdAndName(teamAddEvent.tournamentId, matchName);
-            if (match && !match->HomeTeamId().empty() && !match->VisitorTeamId().empty()) {
-                domain::Score score;
-                score.homeTeamScore = 0;
-                score.visitorTeamScore = 1;
-                matchRepository->UpdateMatchScore(match->Id(), score);
-                
-                domain::ScoreUpdateEvent scoreEvent;
-                scoreEvent.tournamentId = teamAddEvent.tournamentId;
-                scoreEvent.matchId = match->Id();
-                scoreEvent.homeTeamScore = 0;
-                scoreEvent.visitorTeamScore = 1;
-                ProcessScoreUpdate(scoreEvent);
-                
-                std::cout << "[MatchDelegate] " << matchName << " completed: visitor wins 1-0" << std::endl;
-            }
-        }
-        
-        // Play all losers bracket matches (L0-L29)
-        std::cout << "[MatchDelegate] Playing Losers Bracket (L0-L29)..." << std::endl;
-        for (int i = 0; i <= 29; ++i) {
-            std::string matchName = "L" + std::to_string(i);
-            auto match = matchRepository->FindByTournamentIdAndName(teamAddEvent.tournamentId, matchName);
-            if (match && !match->HomeTeamId().empty() && !match->VisitorTeamId().empty()) {
-                domain::Score score;
-                score.homeTeamScore = 0;
-                score.visitorTeamScore = 1;
-                matchRepository->UpdateMatchScore(match->Id(), score);
-                
-                domain::ScoreUpdateEvent scoreEvent;
-                scoreEvent.tournamentId = teamAddEvent.tournamentId;
-                scoreEvent.matchId = match->Id();
-                scoreEvent.homeTeamScore = 0;
-                scoreEvent.visitorTeamScore = 1;
-                ProcessScoreUpdate(scoreEvent);
-                
-                std::cout << "[MatchDelegate] " << matchName << " completed: visitor wins 1-0" << std::endl;
-            }
-        }
-        
-        // Play finals (F0 and possibly F1)
-        std::cout << "[MatchDelegate] Playing Finals (F0-F1)..." << std::endl;
-        for (int i = 0; i <= 1; ++i) {
-            std::string matchName = "F" + std::to_string(i);
-            auto match = matchRepository->FindByTournamentIdAndName(teamAddEvent.tournamentId, matchName);
-            if (match && !match->HomeTeamId().empty() && !match->VisitorTeamId().empty()) {
-                domain::Score score;
-                score.homeTeamScore = 0;
-                score.visitorTeamScore = 1;
-                matchRepository->UpdateMatchScore(match->Id(), score);
-                
-                domain::ScoreUpdateEvent scoreEvent;
-                scoreEvent.tournamentId = teamAddEvent.tournamentId;
-                scoreEvent.matchId = match->Id();
-                scoreEvent.homeTeamScore = 0;
-                scoreEvent.visitorTeamScore = 1;
-                ProcessScoreUpdate(scoreEvent);
-                
-                std::cout << "[MatchDelegate] " << matchName << " completed: visitor wins 1-0" << std::endl;
-                
-                // Print tournament winner after final match
-                if (i == 1 || (i == 0 && matchName == "F0")) {
-                    std::cout << "TOURNAMENT WINNER: " << match->VisitorTeamId() << std::endl;
-                
-            }
-        }
-        
-        std::cout << "[MatchDelegate] TOURNAMENT COMPLETE! Winner determined." << std::endl;
     }
     std::cout << teamAddEvent.tournamentId << " wait for teams, current teams: " << (group ? group->Teams().size() : 0) << std::endl;
 }
@@ -142,18 +65,35 @@ inline void MatchDelegate::ProcessScoreUpdate(const domain::ScoreUpdateEvent& sc
     
     // Determine winner and loser
     std::string winnerTeamId, loserTeamId;
+    bool homeWon = false;
     if (scoreUpdateEvent.homeTeamScore > scoreUpdateEvent.visitorTeamScore) {
         winnerTeamId = match->HomeTeamId();
         loserTeamId = match->VisitorTeamId();
+        homeWon = true;
     } else if (scoreUpdateEvent.visitorTeamScore > scoreUpdateEvent.homeTeamScore) {
         winnerTeamId = match->VisitorTeamId();
         loserTeamId = match->HomeTeamId();
+        homeWon = false;
     } else {
         std::cout << "[MatchDelegate] WARNING: Match " << match->Name() << " ended in a tie, no advancement" << std::endl;
         return;
     }
     
     std::cout << "[MatchDelegate] Winner team: " << winnerTeamId << ", Loser team: " << loserTeamId << std::endl;
+    
+    // Special handling for F0
+    if (match->Name() == "F0") {
+        if (!homeWon) {
+            // Losers bracket champion won F0 -> bracket reset to F1
+            std::cout << "[MatchDelegate] Losers bracket champion won F0, advancing to F1 for bracket reset" << std::endl;
+            AdvanceTeamToNextMatch(scoreUpdateEvent.tournamentId, "F1", winnerTeamId, false); // visitor
+            AdvanceTeamToNextMatch(scoreUpdateEvent.tournamentId, "F1", loserTeamId, true);   // home gets second chance
+        } else {
+            // Winners bracket champion won F0 -> tournament over
+            std::cout << "[MatchDelegate] Winners bracket champion won F0, tournament complete!" << std::endl;
+        }
+        return;
+    }
     
     // Get next matches based on match name
     std::string winnerNextMatch = GetWinnerNextMatch(match->Name());
@@ -251,7 +191,6 @@ inline std::string MatchDelegate::GetWinnerNextMatch(const std::string& matchNam
     // Finals (F0)
     if (matchName == "F0") {
         // If loser bracket wins, go to F1 (bracket reset)
-        // This needs special handling based on who wins
         return ""; // F0 winner wins tournament (unless from losers bracket)
     }
     
@@ -264,11 +203,11 @@ inline std::string MatchDelegate::GetWinnerNextMatch(const std::string& matchNam
 }
 
 inline std::string MatchDelegate::GetLoserNextMatch(const std::string& matchName) {
-    // Winners bracket losers go to losers bracket
+
     if (matchName[0] == 'W') {
         int matchNum = std::stoi(matchName.substr(1));
         
-        // W0-W15 losers -> L0-L7 (pair them up)
+        // W0-W15 losers -> L0-L7
         if (matchNum >= 0 && matchNum <= 15) {
             // W0,W1 -> L0, W2,W3 -> L1, etc.
             return "L" + std::to_string(matchNum / 2);
@@ -277,17 +216,17 @@ inline std::string MatchDelegate::GetLoserNextMatch(const std::string& matchName
         if (matchNum >= 16 && matchNum <= 23) {
             return "L" + std::to_string(8 + (matchNum - 16));
         }
-        // W24-W27 losers -> L16-L19
+        // W24-W27 losers -> L20-L23
         if (matchNum >= 24 && matchNum <= 27) {
-            return "L" + std::to_string(16 + (matchNum - 24));
+            return "L" + std::to_string(20 + (matchNum - 24));
         }
-        // W28-W29 losers -> L20-L21
+        // W28-W29 losers -> L26-L27
         if (matchNum >= 28 && matchNum <= 29) {
-            return "L" + std::to_string(20 + (matchNum - 28) * 2);
+            return "L" + std::to_string(26 + (matchNum - 28));
         }
-        // W30 loser -> L22 or L23 (need to check which slot is free)
+        // W30 loser -> L29
         if (matchNum == 30) {
-            return "L22"; // First available in that round
+            return "L29";
         }
     }
     
@@ -298,8 +237,6 @@ inline std::string MatchDelegate::GetLoserNextMatch(const std::string& matchName
     
     // Finals losers
     if (matchName == "F0") {
-        // If winners bracket rep loses, they're eliminated (single elimination from winners)
-        // If losers bracket rep loses, they're eliminated
         return ""; // One loss in finals = eliminated
     }
     
