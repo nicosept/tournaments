@@ -5,9 +5,14 @@ set(CONSUMER_SOURCES
         src/delegate/BracketGenerator.cpp
 )
 
+include(CTest)
+enable_testing()
+
 find_package(libpqxx CONFIG REQUIRED)
 find_path(HYPODERMIC_INCLUDE_DIRS "Hypodermic/ActivatedRegistrationInfo.h")
 find_package(nlohmann_json CONFIG REQUIRED)
+
+add_subdirectory(tests)
 
 include_directories(include)
 
