@@ -31,13 +31,21 @@ std::expected<std::shared_ptr<domain::Match>, Error> MatchDelegate::GetMatch(std
     if (!tournamentRepository->ReadById(tournamentId.data())) {
         return std::unexpected(Error::NOT_FOUND);
     }
-    return matchRepository->FindByTournamentIdAndMatchId(tournamentId, matchId);
+    auto match = matchRepository->FindByTournamentIdAndMatchId(tournamentId, matchId);
+    if (!match) {
+        return std::unexpected(Error::NOT_FOUND);
+    }
+    return match;
 }
 
 std::expected<std::string, Error> MatchDelegate::UpdateMatchScore(const domain::Match& match) {
   if (!std::regex_match(std::string{match.TournamentId()}, ID_VALUE) ||
     !std::regex_match(std::string{match.Id()}, ID_VALUE)) {
     return std::unexpected(Error::INVALID_FORMAT);
+  }
+
+  if (!tournamentRepository->ReadById(match.TournamentId())) {
+    return std::unexpected(Error::NOT_FOUND);
   }
 
   auto existingMatch = matchRepository->FindByTournamentIdAndMatchId(match.TournamentId(), match.Id());

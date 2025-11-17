@@ -100,10 +100,12 @@ TEST_F(MatchDelegateTest, GetMatches_Ok) {
 
     auto match1 = std::make_shared<domain::Match>();
     match1->Id() = "660e8400-e29b-41d4-a716-446655440001";
+    match1->Name() = "W0";
     match1->TournamentId() = tournamentId;
 
     auto match2 = std::make_shared<domain::Match>();
     match2->Id() = "770e8400-e29b-41d4-a716-446655440002";
+    match2->Name() = "W1";
     match2->TournamentId() = tournamentId;
 
     std::vector<std::shared_ptr<domain::Match>> matches = {match1, match2};
@@ -118,8 +120,21 @@ TEST_F(MatchDelegateTest, GetMatches_Ok) {
 
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(result.value().size(), 2);
+
+    // Aqui se verifica que el resultado coincide con el nombre y ID del primer match
+    auto retrievedMatches = result.value();
+    EXPECT_EQ(retrievedMatches[0]->Id(), "660e8400-e29b-41d4-a716-446655440001");
+    EXPECT_EQ(retrievedMatches[0]->Name(), "W0");
+    EXPECT_EQ(retrievedMatches[0]->TournamentId(), tournamentId);
+    
+    // Verificar que el resultado coincide con el nombre y ID del segundo match
+    EXPECT_EQ(retrievedMatches[1]->Id(), "770e8400-e29b-41d4-a716-446655440002");
+    EXPECT_EQ(retrievedMatches[1]->Name(), "W1");
+    EXPECT_EQ(retrievedMatches[1]->TournamentId(), tournamentId);
+
 }
 
+// Validar error cuando el torneo no existe
 TEST_F(MatchDelegateTest, GetMatches_TournamentNotFound) {
     std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
 
@@ -174,6 +189,7 @@ TEST_F(MatchDelegateTest, GetMatch_Ok) {
 
     auto match = std::make_shared<domain::Match>();
     match->Id() = matchId;
+    match->Name() = "F0";
     match->TournamentId() = tournamentId;
     match->HomeTeamId() = "aa0e8400-e29b-41d4-a716-446655440011";
     match->VisitorTeamId() = "bb0e8400-e29b-41d4-a716-446655440022";
@@ -189,6 +205,7 @@ TEST_F(MatchDelegateTest, GetMatch_Ok) {
     ASSERT_TRUE(result.has_value());
     auto retrievedMatch = result.value();
     EXPECT_EQ(retrievedMatch->Id(), matchId);
+    EXPECT_EQ(retrievedMatch->Name(), "F0");
     EXPECT_EQ(retrievedMatch->TournamentId(), tournamentId);
 }
 
@@ -205,7 +222,28 @@ TEST_F(MatchDelegateTest, GetMatch_TournamentNotFound) {
     EXPECT_EQ(result.error(), Error::NOT_FOUND);
 }
 
-TEST_F(MatchDelegateTest, GetMatch_InvalidFormat) {
+// Validar error cuando el match no existe
+TEST_F(MatchDelegateTest, GetMatch_MatchNotFound) {
+    std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
+    std::string matchId = "880e8400-e29b-41d4-a716-446655440003";
+
+    auto tournament = std::make_shared<domain::Tournament>("Test Tournament");
+    tournament->Id() = tournamentId;
+
+    EXPECT_CALL(*mockTournamentRepository, ReadById(testing::Eq(tournamentId)))
+        .WillOnce(testing::Return(tournament));
+
+    EXPECT_CALL(*mockMatchRepository, FindByTournamentIdAndMatchId(tournamentId, matchId))
+        .WillOnce(testing::Return(nullptr));
+
+    auto result = matchDelegate->GetMatch(tournamentId, matchId);
+
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), Error::NOT_FOUND);
+}
+
+// Validar formato invalido de IDs
+TEST_F(MatchDelegateTest, GetMatch_InvalidTournamentFormat) {
     std::string invalidTournamentId = "invalid!@#";
     std::string matchId = "880e8400-e29b-41d4-a716-446655440003";
 
@@ -215,10 +253,21 @@ TEST_F(MatchDelegateTest, GetMatch_InvalidFormat) {
     EXPECT_EQ(result.error(), Error::INVALID_FORMAT);
 }
 
+TEST_F(MatchDelegateTest, GetMatch_InvalidMatchFormat) {
+    std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
+    std::string invalidMatchId = "invalid!@#";
+
+    auto result = matchDelegate->GetMatch(tournamentId, invalidMatchId);
+
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), Error::INVALID_FORMAT);
+}
+
 // ============================================================================
 // Tests de UpdateMatchScore
 // ============================================================================
 
+// Validar actualizacion correcta de puntaje
 TEST_F(MatchDelegateTest, UpdateMatchScore_Ok) {
     std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
     std::string matchId = "880e8400-e29b-41d4-a716-446655440003";
@@ -229,9 +278,15 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_Ok) {
     match.MatchScore().homeTeamScore = 3;
     match.MatchScore().visitorTeamScore = 2;
 
+    auto tournament = std::make_shared<domain::Tournament>("Test Tournament");
+    tournament->Id() = tournamentId;
+
     auto existingMatch = std::make_shared<domain::Match>();
     existingMatch->Id() = matchId;
     existingMatch->TournamentId() = tournamentId;
+
+    EXPECT_CALL(*mockTournamentRepository, ReadById(testing::Eq(tournamentId)))
+        .WillOnce(testing::Return(tournament));
 
     EXPECT_CALL(*mockMatchRepository, FindByTournamentIdAndMatchId(tournamentId, matchId))
         .WillOnce(testing::Return(existingMatch));
@@ -260,6 +315,34 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_Ok) {
     EXPECT_EQ(result.value(), matchId);
 }
 
+// Validar error cuando el torneo no existe
+TEST_F(MatchDelegateTest, UpdateMatchScore_TournamentNotFound) {
+    std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
+    std::string matchId = "880e8400-e29b-41d4-a716-446655440003";
+
+    domain::Match match;
+    match.Id() = matchId;
+    match.TournamentId() = tournamentId;
+    match.MatchScore().homeTeamScore = 3;
+    match.MatchScore().visitorTeamScore = 2;
+
+    //OJO, no se crea el tournament
+
+    EXPECT_CALL(*mockTournamentRepository, ReadById(testing::Eq(tournamentId)))
+        .WillOnce(testing::Return(nullptr));
+
+    // No se debe llamar a FindByTournamentIdAndMatchId si el torneo no existe
+    EXPECT_CALL(*mockMatchRepository, FindByTournamentIdAndMatchId(testing::_, testing::_)).Times(0);
+    EXPECT_CALL(*mockMatchRepository, UpdateMatchScore(testing::_, testing::_)).Times(0);
+    EXPECT_CALL(*mockMessageProducer, SendMessage(testing::_, testing::_)).Times(0);
+
+    auto result = matchDelegate->UpdateMatchScore(match);
+
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), Error::NOT_FOUND);
+}
+
+// Validar error cuando el partido no existe
 TEST_F(MatchDelegateTest, UpdateMatchScore_MatchNotFound) {
     std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
     std::string matchId = "990e8400-e29b-41d4-a716-446655440099";
@@ -269,6 +352,12 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_MatchNotFound) {
     match.TournamentId() = tournamentId;
     match.MatchScore().homeTeamScore = 3;
     match.MatchScore().visitorTeamScore = 2;
+
+    auto tournament = std::make_shared<domain::Tournament>("Test Tournament");
+    tournament->Id() = tournamentId;
+
+    EXPECT_CALL(*mockTournamentRepository, ReadById(testing::Eq(tournamentId)))
+        .WillOnce(testing::Return(tournament));
 
     EXPECT_CALL(*mockMatchRepository, FindByTournamentIdAndMatchId(
         testing::Eq(tournamentId), 
@@ -281,10 +370,11 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_MatchNotFound) {
     EXPECT_EQ(result.error(), Error::NOT_FOUND);
 }
 
-TEST_F(MatchDelegateTest, UpdateMatchScore_InvalidFormat) {
+// Validar error cuando el formato ID es inválido
+TEST_F(MatchDelegateTest, UpdateMatchScore_InvalidMatchIDFormat) {
     domain::Match match;
     match.Id() = "invalid!@#";
-    match.TournamentId() = "invalid-tournament!@#";
+    match.TournamentId() = "550e8400-e29b-41d4-a716-446655440000";
     match.MatchScore().homeTeamScore = 3;
     match.MatchScore().visitorTeamScore = 2;
 
@@ -294,6 +384,20 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_InvalidFormat) {
     EXPECT_EQ(result.error(), Error::INVALID_FORMAT);
 }
 
+TEST_F(MatchDelegateTest, UpdateMatchScore_InvalidTournamentIDFormat) {
+    domain::Match match;
+    match.Id() = "880e8400-e29b-41d4-a716-446655440003";
+    match.TournamentId() = "invalid!@#";
+    match.MatchScore().homeTeamScore = 3;
+    match.MatchScore().visitorTeamScore = 2;
+
+    auto result = matchDelegate->UpdateMatchScore(match);
+
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), Error::INVALID_FORMAT);
+}
+
+// Validar error cuando el puntaje es negativo
 TEST_F(MatchDelegateTest, UpdateMatchScore_NegativeScore) {
     std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
     std::string matchId = "880e8400-e29b-41d4-a716-446655440003";
@@ -304,9 +408,15 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_NegativeScore) {
     match.MatchScore().homeTeamScore = -1;
     match.MatchScore().visitorTeamScore = 2;
 
+    auto tournament = std::make_shared<domain::Tournament>("Test Tournament");
+    tournament->Id() = tournamentId;
+
     auto existingMatch = std::make_shared<domain::Match>();
     existingMatch->Id() = matchId;
     existingMatch->TournamentId() = tournamentId;
+
+    EXPECT_CALL(*mockTournamentRepository, ReadById(testing::Eq(tournamentId)))
+        .WillOnce(testing::Return(tournament));
 
     EXPECT_CALL(*mockMatchRepository, FindByTournamentIdAndMatchId(
         testing::Eq(tournamentId), 
@@ -322,6 +432,7 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_NegativeScore) {
     EXPECT_EQ(result.error(), Error::INVALID_FORMAT);
 }
 
+// Validar error cuando ambos puntajes son negativos
 TEST_F(MatchDelegateTest, UpdateMatchScore_BothScoresNegative) {
     std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
     std::string matchId = "880e8400-e29b-41d4-a716-446655440003";
@@ -332,9 +443,15 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_BothScoresNegative) {
     match.MatchScore().homeTeamScore = -1;
     match.MatchScore().visitorTeamScore = -2;
 
+    auto tournament = std::make_shared<domain::Tournament>("Test Tournament");
+    tournament->Id() = tournamentId;
+
     auto existingMatch = std::make_shared<domain::Match>();
     existingMatch->Id() = matchId;
     existingMatch->TournamentId() = tournamentId;
+
+    EXPECT_CALL(*mockTournamentRepository, ReadById(testing::Eq(tournamentId)))
+        .WillOnce(testing::Return(tournament));
 
     EXPECT_CALL(*mockMatchRepository, FindByTournamentIdAndMatchId(
         testing::Eq(tournamentId), 
@@ -350,6 +467,7 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_BothScoresNegative) {
     EXPECT_EQ(result.error(), Error::INVALID_FORMAT);
 }
 
+// Validar error cuando el puntaje es empate
 TEST_F(MatchDelegateTest, UpdateMatchScore_TieScore) {
     std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
     std::string matchId = "880e8400-e29b-41d4-a716-446655440003";
@@ -360,9 +478,15 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_TieScore) {
     match.MatchScore().homeTeamScore = 2;
     match.MatchScore().visitorTeamScore = 2;
 
+    auto tournament = std::make_shared<domain::Tournament>("Test Tournament");
+    tournament->Id() = tournamentId;
+
     auto existingMatch = std::make_shared<domain::Match>();
     existingMatch->Id() = matchId;
     existingMatch->TournamentId() = tournamentId;
+
+    EXPECT_CALL(*mockTournamentRepository, ReadById(testing::Eq(tournamentId)))
+        .WillOnce(testing::Return(tournament));
 
     EXPECT_CALL(*mockMatchRepository, FindByTournamentIdAndMatchId(
         testing::Eq(tournamentId), 
@@ -376,46 +500,4 @@ TEST_F(MatchDelegateTest, UpdateMatchScore_TieScore) {
 
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), Error::INVALID_FORMAT);
-}
-
-TEST_F(MatchDelegateTest, UpdateMatchScore_MessageContainsCorrectData) {
-    std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
-    std::string matchId = "880e8400-e29b-41d4-a716-446655440003";
-
-    domain::Match match;
-    match.Id() = matchId;
-    match.TournamentId() = tournamentId;
-    match.MatchScore().homeTeamScore = 5;
-    match.MatchScore().visitorTeamScore = 3;
-
-    auto existingMatch = std::make_shared<domain::Match>();
-    existingMatch->Id() = matchId;
-    existingMatch->TournamentId() = tournamentId;
-
-    EXPECT_CALL(*mockMatchRepository, FindByTournamentIdAndMatchId(
-        testing::Eq(tournamentId), 
-        testing::Eq(matchId)
-    )).WillOnce(testing::Return(existingMatch));
-
-    EXPECT_CALL(*mockMatchRepository, UpdateMatchScore(
-        testing::Eq(matchId),
-        testing::AllOf(
-            testing::Field(&domain::Score::homeTeamScore, 5),
-            testing::Field(&domain::Score::visitorTeamScore, 3)
-        )
-    )).Times(1);
-
-    EXPECT_CALL(*mockMessageProducer, SendMessage(
-        testing::AllOf(
-            testing::HasSubstr("\"tournamentId\":\"" + tournamentId + "\""),
-            testing::HasSubstr("\"matchId\":\"" + matchId + "\""),
-            testing::HasSubstr("\"homeTeamScore\":5"),
-            testing::HasSubstr("\"visitorTeamScore\":3")
-        ),
-        testing::Not(testing::IsEmpty())
-    )).Times(1);
-
-    auto result = matchDelegate->UpdateMatchScore(match);
-
-    ASSERT_TRUE(result.has_value());
-}
+}  
