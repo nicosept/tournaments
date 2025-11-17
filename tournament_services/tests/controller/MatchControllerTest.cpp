@@ -121,7 +121,7 @@ TEST_F(MatchControllerTest, GetMatches_Ok) {
   match2->HomeTeamId() = "team-home-2";
   match2->VisitorTeamId() = "team-visitor-2";
   match2->MatchScore().homeTeamScore = 2;
-  match2->MatchScore().visitorTeamScore = 2;
+  match2->MatchScore().visitorTeamScore = 1;
   
   matches.push_back(match1);
   matches.push_back(match2);
@@ -185,7 +185,12 @@ TEST_F(MatchControllerTest, UpdateMatchScore_Ok) {
   std::string matchId = "match-id-001";
   domain::Match capturedMatch;
   
-  EXPECT_CALL(*matchDelegateMock, UpdateMatchScore(testing::_))
+  EXPECT_CALL(*matchDelegateMock, UpdateMatchScore(
+      testing::AllOf(
+          testing::ResultOf([](const domain::Match& m) { return m.TournamentId(); }, testing::Eq(tournamentId)),
+          testing::ResultOf([](const domain::Match& m) { return m.Id(); }, testing::Eq(matchId)),
+          testing::ResultOf([](const domain::Match& m) { return m.MatchScore().homeTeamScore; }, testing::Eq(3)),
+          testing::ResultOf([](const domain::Match& m) { return m.MatchScore().visitorTeamScore; }, testing::Eq(2)))))
     .WillOnce(testing::DoAll(
         testing::SaveArg<0>(&capturedMatch),
         testing::Return(std::expected<std::string, Error>{std::in_place, matchId})));
@@ -209,16 +214,18 @@ TEST_F(MatchControllerTest, UpdateMatchScore_Ok) {
   EXPECT_EQ(2, capturedMatch.MatchScore().visitorTeamScore);
 }
 
-// Validar actualizacion con scores en cero. Response 200
+// Validar error empate con scores en cero. Response 400
 TEST_F(MatchControllerTest, UpdateMatchScore_ZeroScores) {
   std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
   std::string matchId = "match-id-001";
-  domain::Match capturedMatch;
   
-  EXPECT_CALL(*matchDelegateMock, UpdateMatchScore(testing::_))
-    .WillOnce(testing::DoAll(
-        testing::SaveArg<0>(&capturedMatch),
-        testing::Return(std::expected<std::string, Error>{std::in_place, matchId})));
+  EXPECT_CALL(*matchDelegateMock, UpdateMatchScore(
+      testing::AllOf(
+          testing::ResultOf([](const domain::Match& m) { return m.TournamentId(); }, testing::Eq(tournamentId)),
+          testing::ResultOf([](const domain::Match& m) { return m.Id(); }, testing::Eq(matchId)),
+          testing::ResultOf([](const domain::Match& m) { return m.MatchScore().homeTeamScore; }, testing::Eq(0)),
+          testing::ResultOf([](const domain::Match& m) { return m.MatchScore().visitorTeamScore; }, testing::Eq(0)))))
+    .WillOnce(testing::Return(std::expected<std::string, Error>{std::unexpected(Error::INVALID_FORMAT)}));
 
   nlohmann::json requestBody = {
     {"score", {
@@ -232,9 +239,7 @@ TEST_F(MatchControllerTest, UpdateMatchScore_ZeroScores) {
 
   crow::response response = matchController->updateMatchScore(request, tournamentId, matchId);
 
-  EXPECT_EQ(crow::OK, response.code);
-  EXPECT_EQ(0, capturedMatch.MatchScore().homeTeamScore);
-  EXPECT_EQ(0, capturedMatch.MatchScore().visitorTeamScore);
+  EXPECT_EQ(crow::BAD_REQUEST, response.code);
 }
 
 // Validar error cuando el JSON es invalido. Response 400
@@ -424,7 +429,12 @@ TEST_F(MatchControllerTest, UpdateMatchScore_InvalidFormat) {
   std::string tournamentId = "550e8400-e29b-41d4-a716-446655440000";
   std::string matchId = "match-id-001";
   
-  EXPECT_CALL(*matchDelegateMock, UpdateMatchScore(testing::_))
+  EXPECT_CALL(*matchDelegateMock, UpdateMatchScore(
+      testing::AllOf(
+          testing::ResultOf([](const domain::Match& m) { return m.TournamentId(); }, testing::Eq(tournamentId)),
+          testing::ResultOf([](const domain::Match& m) { return m.Id(); }, testing::Eq(matchId)),
+          testing::ResultOf([](const domain::Match& m) { return m.MatchScore().homeTeamScore; }, testing::Eq(3)),
+          testing::ResultOf([](const domain::Match& m) { return m.MatchScore().visitorTeamScore; }, testing::Eq(2)))))
     .WillOnce(testing::Return(
         std::expected<std::string, Error>{std::unexpected(Error::INVALID_FORMAT)}));
 
